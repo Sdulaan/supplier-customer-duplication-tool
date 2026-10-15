@@ -1,0 +1,15 @@
+{
+  "environments": [
+    {
+      "name": "IFS TEST",
+      "variables": {
+        "baseUrl": "https://your-ifs-host",
+        "authUrl": "https://your-ifs-host/auth/realms/<realm>/protocol/openid-connect/auth",
+        "tokenUrl": "https://your-ifs-host/auth/realms/<realm>/protocol/openid-connect/token",
+        "clientId": "your-client-id",
+        "clientSecret": "",
+        "scope": "openid"
+      }
+    }
+  ]
+}
