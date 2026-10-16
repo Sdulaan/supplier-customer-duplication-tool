@@ -1,0 +1,3 @@
+SELECT *
+FROM   SUPPLIER_INFO_ADDRESS_CFV
+ORDER  BY supplier_id, address_id

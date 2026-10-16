@@ -10,7 +10,8 @@ import CloseIcon from '@mui/icons-material/Close'
 const NAV = [
   { href: '/', label: 'Dashboard', icon: DashboardOutlinedIcon },
   { href: '/environments', label: 'Environments', icon: SettingsEthernetIcon },
-  { href: '/data-source', label: 'Data Source', icon: CloudSyncOutlinedIcon },
+  { href: '/suppliers', label: 'Suppliers', icon: CloudSyncOutlinedIcon },
+  { href: '/customers', label: 'Customers', icon: CloudSyncOutlinedIcon },
   { href: '/duplicates', label: 'Duplicate Review', icon: ContentCopyOutlinedIcon }
 ]
 

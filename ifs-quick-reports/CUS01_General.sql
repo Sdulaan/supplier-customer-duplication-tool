@@ -1,0 +1,3 @@
+SELECT *
+FROM   CUSTOMER_INFO_CFV
+ORDER  BY customer_id

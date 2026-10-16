@@ -8,7 +8,7 @@ import {
   loadAllEnvironments, saveEnvironments, getActiveEnvId, setActiveEnvId, newEnvironment,
   getToken, clearToken, parseEnvironmentFile
 } from '../lib/environments'
-import { authorizeInBrowser, redirectUri } from '../lib/oauth'
+import { authorizeInBrowser, authorizeWithPassword, redirectUri } from '../lib/oauth'
 
 export default function EnvironmentsPage() {
   const [envs, setEnvs] = useState([])
@@ -16,6 +16,7 @@ export default function EnvironmentsPage() {
   const [auth, setAuth] = useState({ state: 'idle', error: '' })
   const [, bump] = useState(0)
   const [importMsg, setImportMsg] = useState(null)
+  const [creds, setCreds] = useState(null) // { username, password } while the sign-in dialog is open
   const fileRef = useRef(null)
 
   useEffect(() => {
@@ -63,13 +64,14 @@ export default function EnvironmentsPage() {
     event.target.value = ''
     if (!file) return
     try {
-      const imported = parseEnvironmentFile(await file.text())
+      const imported = parseEnvironmentFile(await file.text(), file.name)
       const local = envs.filter((e) => !e.fromFile)
       const kept = local.length === 1 && local[0].variables.every((v) => !v.value) ? [] : local
       const next = [...envs.filter((e) => e.fromFile), ...kept, ...imported]
       commit(next)
       select(imported[0].id)
-      setImportMsg({ ok: true, text: `Imported ${imported.length} environment${imported.length > 1 ? 's' : ''} from ${file.name}.` })
+      setImportMsg({ ok: true, text: `Imported ${imported.length} environment${imported.length > 1 ? 's' : ''} from ${file.name}. Enter your username and password to get a token.` })
+      setCreds({ username: '', password: '' })
     } catch (err) {
       setImportMsg({ ok: false, text: err.message })
     }
@@ -86,8 +88,44 @@ export default function EnvironmentsPage() {
     bump((n) => n + 1)
   }
 
+  async function signIn(e) {
+    e.preventDefault()
+    const { username, password } = creds
+    setAuth({ state: 'working', error: '' })
+    try {
+      await authorizeWithPassword(env, username, password)
+      setAuth({ state: 'idle', error: '' })
+      setCreds(null)
+    } catch (err) {
+      setAuth({ state: 'error', error: err.message })
+    }
+    bump((n) => n + 1)
+  }
+
   return (
     <>
+      {creds && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', display: 'grid', placeItems: 'center', zIndex: 50 }}>
+          <form className="panel" onSubmit={signIn} style={{ width: 380, maxWidth: '90vw' }}>
+            <div className="section-heading"><div><span className="eyebrow">SIGN IN</span><h2>{env.name}</h2></div></div>
+            <label className="env-name">
+              Username
+              <input autoFocus value={creds.username} autoComplete="username" onChange={(e) => setCreds({ ...creds, username: e.target.value })} />
+            </label>
+            <label className="env-name">
+              Password
+              <input type="password" value={creds.password} autoComplete="current-password" onChange={(e) => setCreds({ ...creds, password: e.target.value })} />
+            </label>
+            {auth.state === 'error' && <div className="auth-banner error"><ErrorOutlineIcon fontSize="small" /> {auth.error}</div>}
+            <div className="actions">
+              <button type="button" className="ghost" onClick={() => { setCreds(null); setAuth({ state: 'idle', error: '' }) }}>Cancel</button>
+              <button type="submit" disabled={auth.state === 'working' || !creds.username || !creds.password}>
+                {auth.state === 'working' ? 'Signing in…' : 'Get access token'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
       <header className="page-head">
         <div>
           <span className="eyebrow">ENVIRONMENTS</span>
@@ -161,7 +199,7 @@ export default function EnvironmentsPage() {
 
           <div className="panel">
             <div className="section-heading">
-              <div><span className="eyebrow">AUTHORIZATION</span><h2>OAuth 2.0 · Authorization Code (PKCE)</h2></div>
+              <div><span className="eyebrow">AUTHORIZATION</span><h2>OAuth 2.0 · Password Credentials or browser (PKCE)</h2></div>
             </div>
             <p className="muted" style={{ margin: '0 0 6px', fontSize: 13 }}>
               Register this callback URL on the IFS client: <code>{redirectUri()}</code>
@@ -178,8 +216,11 @@ export default function EnvironmentsPage() {
 
             <div className="actions">
               {token && <button className="ghost" onClick={() => { clearToken(env.id); bump((n) => n + 1) }}>Clear token</button>}
-              <button onClick={authorize} disabled={auth.state === 'working'}>
-                {auth.state === 'working' ? 'Waiting for sign-in…' : token ? 'Get new access token' : 'Authorize using browser'}
+              <button className="secondary" onClick={authorize} disabled={auth.state === 'working'}>
+                {auth.state === 'working' && !creds ? 'Waiting for sign-in…' : 'Authorize using browser'}
+              </button>
+              <button onClick={() => { setAuth({ state: 'idle', error: '' }); setCreds({ username: '', password: '' }) }} disabled={auth.state === 'working'}>
+                {token ? 'Get new access token' : 'Sign in with username & password'}
               </button>
             </div>
           </div>

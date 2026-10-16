@@ -86,3 +86,27 @@ export async function authorizeInBrowser(env) {
   storeToken(env.id, body)
   return body
 }
+
+// Postman's "Password Credentials" grant: username/password are sent once to the backend, never stored.
+export async function authorizeWithPassword(env, username, password) {
+  const v = resolveVariables(env)
+  const missing = ['tokenUrl', 'clientId'].filter((k) => !v[k])
+  if (missing.length) throw new Error(`Set ${missing.join(', ')} in the environment first.`)
+  const res = await fetch('/api/auth/password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      tokenUrl: v.tokenUrl,
+      clientId: v.clientId,
+      clientSecret: v.clientSecret || null,
+      envName: env.fromFile ? env.name : null,
+      username,
+      password,
+      scope: v.scope || 'openid'
+    })
+  })
+  const body = await res.json().catch(() => null)
+  if (!res.ok || !body?.success) throw new Error(body?.error || `Sign-in failed (${res.status}).`)
+  storeToken(env.id, body)
+  return body
+}

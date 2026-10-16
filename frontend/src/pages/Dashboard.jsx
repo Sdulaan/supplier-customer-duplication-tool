@@ -24,7 +24,10 @@ export default function DashboardPage() {
           <h1>Supplier &amp; Customer Duplication</h1>
           <p>Authorize an environment, fetch supplier and customer data, and review suspected duplicates.</p>
         </div>
-        <Link to="/data-source" className="button">Fetch data</Link>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <Link to="/suppliers" className="button">Fetch suppliers</Link>
+          <Link to="/customers" className="button secondary">Fetch customers</Link>
+        </div>
       </header>
 
       <div className="cards">
@@ -41,7 +44,7 @@ export default function DashboardPage() {
 
       {!fetched && (
         <div className="panel">
-          <div className="empty">No data fetched yet. Set up an environment, then fetch from Data Source.</div>
+          <div className="empty">No data fetched yet. Set up an environment, then fetch Suppliers and Customers.</div>
         </div>
       )}
     </>

@@ -1,8 +1,10 @@
 // In-memory result of the last fetch (cleared on page reload).
 let current = null
 
+// Supplier and customer are fetched separately; each fetch replaces only its own entity.
 export function setFetched(results) {
-  current = { results, fetchedAt: new Date().toISOString() }
+  const kept = (current?.results || []).filter((r) => !results.some((n) => n.entity === r.entity))
+  current = { results: [...kept, ...results], fetchedAt: new Date().toISOString() }
 }
 
 export function getFetched() {

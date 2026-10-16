@@ -1,0 +1,3 @@
+SELECT *
+FROM   SUPPLIER_CFV
+ORDER  BY vendor_no

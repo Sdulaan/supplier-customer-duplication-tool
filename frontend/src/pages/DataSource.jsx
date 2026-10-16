@@ -3,20 +3,23 @@ import { Link } from 'react-router-dom'
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutlineOutlined'
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlined'
 import { ENTITIES } from '../lib/entities'
-import { setFetched } from '../lib/dataStore'
+import RecordBrowser from '../components/RecordBrowser'
+import ReportImport from '../components/ReportImport'
+import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined'
+import { setFetched, getFetched } from '../lib/dataStore'
 import { loadAllEnvironments, getActiveEnvId, setActiveEnvId, getToken, resolveVariables } from '../lib/environments'
 
-const STAGE_LABEL = {
-  general: 'General information',
-  supplier_address: 'Addresses',
-  supplier_payment: 'Payments'
-}
-
-// Fetches supplier / customer master data from IFS (GET only) through the backend,
-// using the access token obtained by browser authorization.
-export default function DataSourcePage() {
+// Fetches one entity (supplier or customer) with everything connected to it from IFS (GET only),
+// through the backend, using the access token from the Environments page.
+export default function EntityDataPage({ entityId }) {
+  const entity = ENTITIES.find((e) => e.id === entityId)
+  const [source, setSource] = useState('api') // 'api' (IFS environment) | 'reports' (Quick report files)
   const [envs, setEnvs] = useState([])
   const [envId, setEnvId] = useState('')
+  const [state, setState] = useState(() => {
+    const prior = getFetched()?.results.find((r) => r.entity === entityId)
+    return { status: prior ? 'done' : 'idle', error: '', result: prior || null }
+  })
 
   useEffect(() => {
     loadAllEnvironments().then((all) => {
@@ -24,32 +27,52 @@ export default function DataSourcePage() {
       setEnvId(getActiveEnvId(all))
     })
   }, [])
-  const [selected, setSelected] = useState(['supplier', 'customer'])
-  const [state, setState] = useState({ status: 'idle', error: '', results: null })
 
   const env = envs.find((e) => e.id === envId)
   const vars = resolveVariables(env)
   const token = envId ? getToken(envId) : null
-  const ready = Boolean(vars.baseUrl && token && selected.length)
-
-  function toggle(id) {
-    setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]))
-  }
+  const ready = Boolean(vars.baseUrl && token)
 
   async function fetchData() {
-    setState({ status: 'fetching', error: '', results: null })
+    setState({ status: 'fetching', error: '', result: null })
     try {
       const res = await fetch('/api/ifs/fetch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ baseUrl: vars.baseUrl, accessToken: token.accessToken, entities: selected })
+        body: JSON.stringify({ baseUrl: vars.baseUrl, accessToken: token.accessToken, entities: [entityId] })
       })
       const body = await res.json().catch(() => null)
       if (!res.ok || !body?.success) throw new Error(body?.error || body?.detail || `Fetch failed (${res.status}).`)
       setFetched(body.results)
-      setState({ status: 'done', error: '', results: body.results })
+      setState({ status: 'done', error: '', result: body.results[0] })
     } catch (err) {
-      setState({ status: 'error', error: err.message, results: null })
+      setState({ status: 'error', error: err.message, result: null })
+    }
+  }
+
+  const name = entity.label.toLowerCase()
+
+  function onReportsLoaded(result) {
+    setFetched([result])
+    setState({ status: 'done', error: '', result })
+  }
+
+  async function exportExcel() {
+    try {
+      const res = await fetch(`/api/export/${entityId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ result: state.result })
+      })
+      if (!res.ok) throw new Error(`Export failed (${res.status}).`)
+      const url = URL.createObjectURL(await res.blob())
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${entityId}-mapped.xlsx`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setState((s) => ({ ...s, error: err.message }))
     }
   }
 
@@ -57,15 +80,22 @@ export default function DataSourcePage() {
     <>
       <header className="page-head">
         <div>
-          <span className="eyebrow">DATA SOURCE</span>
-          <h1>Fetch Data</h1>
-          <p>Pull supplier and customer master data from IFS with GET requests, using your browser-authorized environment.</p>
+          <span className="eyebrow">{entity.label.toUpperCase()}S</span>
+          <h1>{entity.label} Data</h1>
+          <p>Collect every {name} with all the data connected to it, either from an IFS environment or from Quick Report exports.</p>
         </div>
       </header>
 
-      <div className="panel">
+      <div className="tabs">
+        <button className={`tab ${source === 'api' ? 'active' : ''}`} onClick={() => setSource('api')}>IFS environment</button>
+        <button className={`tab ${source === 'reports' ? 'active' : ''}`} onClick={() => setSource('reports')}>Quick report files</button>
+      </div>
+
+      {source === 'reports' && <ReportImport entity={entity} onLoaded={onReportsLoaded} loaded={Boolean(state.result)} />}
+
+      {source === 'api' && <div className="panel">
         <div className="section-heading">
-          <div><span className="eyebrow">STEP 1</span><h2>Environment</h2></div>
+          <div><span className="eyebrow">ENVIRONMENT</span><h2>Source</h2></div>
           <Link to="/environments" className="button secondary">Manage environments</Link>
         </div>
         <div className="toolbar">
@@ -77,54 +107,23 @@ export default function DataSourcePage() {
         {token ? (
           <div className="auth-banner success"><CheckCircleOutlineIcon fontSize="small" /> Authorized until {new Date(token.expiresAt).toLocaleTimeString()}.</div>
         ) : (
-          <div className="auth-banner warning"><ErrorOutlineIcon fontSize="small" /> Not authorized. Open Environments and use “Authorize using browser”.</div>
+          <div className="auth-banner warning"><ErrorOutlineIcon fontSize="small" /> Not authorized. Open Environments and sign in with your username and password.</div>
         )}
-      </div>
-
-      <div className="panel">
-        <div className="section-heading">
-          <div><span className="eyebrow">STEP 2</span><h2>Entities to fetch</h2></div>
-        </div>
-        <div className="entity-grid">
-          {ENTITIES.map((e) => (
-            <label key={e.id} className={`entity-card ${selected.includes(e.id) ? 'active' : ''}`}>
-              <input type="checkbox" checked={selected.includes(e.id)} onChange={() => toggle(e.id)} />
-              <span><strong>{e.label}</strong><small>{e.description}</small></span>
-            </label>
-          ))}
-        </div>
         {state.status === 'error' && <div className="auth-banner error"><ErrorOutlineIcon fontSize="small" /> {state.error}</div>}
         <div className="actions">
           <button onClick={fetchData} disabled={!ready || state.status === 'fetching'}>
-            {state.status === 'fetching' ? 'Fetching…' : 'Fetch data'}
+            {state.status === 'fetching' ? `Fetching ${name}s…` : `Fetch ${name}s`}
           </button>
         </div>
-      </div>
+      </div>}
 
-      {state.results && (
-        <div className="panel">
-          <div className="section-heading">
-            <div><span className="eyebrow">RESULT</span><h2>Fetched records</h2></div>
-            <Link to="/duplicates" className="button">Review duplicates</Link>
-          </div>
-          <div className="table-wrap">
-            <table className="plain">
-              <thead><tr><th>Entity</th><th>Data set</th><th>Records</th><th>Errors</th></tr></thead>
-              <tbody>
-                {state.results.flatMap((r) =>
-                  Object.entries(r.stages).map(([stage, s]) => (
-                    <tr key={`${r.entity}-${stage}`}>
-                      <td><b>{r.entity}</b></td>
-                      <td>{STAGE_LABEL[stage] || stage} <span className="muted">({s.collection})</span></td>
-                      <td>{s.records.length.toLocaleString()}</td>
-                      <td>{s.errors.length ? <span className="badge HIGH">{s.errors.length}</span> : '—'}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+      {state.status === 'error' && source === 'reports' && <div className="auth-banner error"><ErrorOutlineIcon fontSize="small" /> {state.error}</div>}
+      {state.result && (
+        <RecordBrowser
+          entity={entity}
+          result={state.result}
+          actions={<button className="secondary" onClick={exportExcel}><FileDownloadOutlinedIcon fontSize="small" /> Download Excel</button>}
+        />
       )}
     </>
   )

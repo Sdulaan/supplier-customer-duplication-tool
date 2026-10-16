@@ -1,0 +1,3 @@
+SELECT *
+FROM   CUSTOMER_INFO_ADDRESS_TYPE
+ORDER  BY customer_id, address_id

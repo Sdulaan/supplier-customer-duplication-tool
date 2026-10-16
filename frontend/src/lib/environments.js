@@ -96,17 +96,34 @@ export async function loadAllEnvironments() {
   return [...fileEnvs, ...local]
 }
 
+// Flat config -> variables. "authPath"/"tokenPath" are the token endpoint, so alias them to tokenUrl.
+function flatVariables(data) {
+  const vars = {}
+  for (const [key, value] of Object.entries(data)) {
+    if (key === 'name' || value === null || typeof value === 'object') continue
+    vars[key] = value
+  }
+  const tokenUrl = vars.tokenUrl || vars.authPath || vars.tokenPath
+  if (tokenUrl) vars.tokenUrl = tokenUrl
+  return vars
+}
+
 // Parse an uploaded config file into environments. Accepts:
 //  - this tool's format: { "environments": [{ "name", "variables": { key: value } }] } (or a single such object)
 //  - a Postman environment export: { "name", "values": [{ "key", "value", "enabled" }] }
-export function parseEnvironmentFile(text) {
+//  - a flat config: { "baseUrl", "authPath" (token endpoint), "clientId", "clientSecret" } - every key becomes a variable
+export function parseEnvironmentFile(text, fileName = '') {
   let data
   try {
     data = JSON.parse(text)
   } catch {
     throw new Error('The file is not valid JSON.')
   }
-  const items = Array.isArray(data?.environments) ? data.environments : [data]
+  const isFlat = data && typeof data === 'object' && !Array.isArray(data) &&
+    !Array.isArray(data.environments) && !Array.isArray(data.values) && !(data.variables && typeof data.variables === 'object')
+  const items = Array.isArray(data?.environments)
+    ? data.environments
+    : [isFlat ? { name: data.name || fileName.replace(/\.json$/i, ''), variables: flatVariables(data) } : data]
   const envs = items.map((item, i) => {
     let variables
     if (Array.isArray(item?.values)) {
