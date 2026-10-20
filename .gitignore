@@ -3,3 +3,5 @@ dist
 .venv
 __pycache__
 backend/environments.json
+backend/models/
+backend/data/

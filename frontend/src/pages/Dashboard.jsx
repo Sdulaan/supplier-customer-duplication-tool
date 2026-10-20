@@ -1,19 +1,22 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import StorageOutlinedIcon from '@mui/icons-material/StorageOutlined'
-import LinkOutlinedIcon from '@mui/icons-material/LinkOutlined'
+import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined'
 import ScheduleOutlinedIcon from '@mui/icons-material/ScheduleOutlined'
-import { getFetched, summarize } from '../lib/dataStore'
+import { SCAN_ENTITIES, fetchJson, formatScanTime } from '../lib/scans'
 
 export default function DashboardPage() {
-  const fetched = getFetched()
-  const sum = summarize(fetched)
-  const fmt = (n) => (n == null ? '—' : n.toLocaleString())
+  const [scans, setScans] = useState(null)
+  useEffect(() => { fetchJson('/api/spec-dedup/scans').then(setScans, () => setScans([])) }, [])
 
+  const of = (entity) => (scans || []).filter((s) => s.entity === entity)
+  const latest = scans?.[0]
+  const fmt = (n) => (scans ? n.toLocaleString() : '—')
   const cards = [
-    { label: 'Suppliers Fetched', value: fmt(sum.entities.supplier), icon: StorageOutlinedIcon, tone: 'accent' },
-    { label: 'Customers Fetched', value: fmt(sum.entities.customer), icon: StorageOutlinedIcon, tone: 'success' },
-    { label: 'Related Records', value: fetched ? fmt(sum.related) : '—', icon: LinkOutlinedIcon, tone: 'muted' },
-    { label: 'Last Fetch', value: sum.fetchedAt ? new Date(sum.fetchedAt).toLocaleString() : '—', icon: ScheduleOutlinedIcon, tone: 'muted', small: true }
+    { label: 'Supplier Scans', value: fmt(of('supplier').length), icon: StorageOutlinedIcon, tone: 'accent' },
+    { label: 'Customer Scans', value: fmt(of('customer').length), icon: StorageOutlinedIcon, tone: 'success' },
+    { label: 'Groups Found', value: fmt((scans || []).reduce((n, s) => n + s.groups, 0)), icon: ContentCopyOutlinedIcon, tone: 'muted' },
+    { label: 'Last Scan', value: latest ? formatScanTime(latest.createdAt) : '—', icon: ScheduleOutlinedIcon, tone: 'muted', small: true }
   ]
 
   return (
@@ -22,11 +25,11 @@ export default function DashboardPage() {
         <div>
           <span className="eyebrow">DASHBOARD</span>
           <h1>Supplier &amp; Customer Duplication</h1>
-          <p>Authorize an environment, fetch supplier and customer data, and review suspected duplicates.</p>
+          <p>Add data from Quick Report files or an IFS environment, run a scan, and review suspected duplicates.</p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
-          <Link to="/suppliers" className="button">Fetch suppliers</Link>
-          <Link to="/customers" className="button secondary">Fetch customers</Link>
+          <Link to={`${SCAN_ENTITIES.supplier.base}/new`} className="button">New supplier scan</Link>
+          <Link to={`${SCAN_ENTITIES.customer.base}/new`} className="button secondary">New customer scan</Link>
         </div>
       </header>
 
@@ -42,9 +45,9 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {!fetched && (
+      {scans && scans.length === 0 && (
         <div className="panel">
-          <div className="empty">No data fetched yet. Set up an environment, then fetch Suppliers and Customers.</div>
+          <div className="empty">No scans yet. Start a supplier or customer scan; every scan is saved with its Excel report.</div>
         </div>
       )}
     </>

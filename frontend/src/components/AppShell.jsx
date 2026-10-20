@@ -2,17 +2,15 @@ import { Link, Outlet, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import DashboardOutlinedIcon from '@mui/icons-material/DashboardOutlined'
 import SettingsEthernetIcon from '@mui/icons-material/SettingsEthernet'
-import CloudSyncOutlinedIcon from '@mui/icons-material/CloudSyncOutlined'
-import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined'
+import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined'
 import MenuIcon from '@mui/icons-material/Menu'
 import CloseIcon from '@mui/icons-material/Close'
 
 const NAV = [
   { href: '/', label: 'Dashboard', icon: DashboardOutlinedIcon },
   { href: '/environments', label: 'Environments', icon: SettingsEthernetIcon },
-  { href: '/suppliers', label: 'Suppliers', icon: CloudSyncOutlinedIcon },
-  { href: '/customers', label: 'Customers', icon: CloudSyncOutlinedIcon },
-  { href: '/duplicates', label: 'Duplicate Review', icon: ContentCopyOutlinedIcon }
+  { href: '/supplier-scans', label: 'Supplier Scans', icon: FactCheckOutlinedIcon },
+  { href: '/customer-scans', label: 'Customer Scans', icon: FactCheckOutlinedIcon },
 ]
 
 export default function AppShell() {
@@ -34,7 +32,7 @@ export default function AppShell() {
         </div>
         <nav className="app-nav">
           {NAV.map(({ href, label, icon: Icon }) => (
-            <Link key={href} to={href} onClick={() => setMenuOpen(false)} className={pathname === href ? 'active' : ''}>
+            <Link key={href} to={href} onClick={() => setMenuOpen(false)} className={pathname === href || (href !== '/' && pathname.startsWith(href + '/')) ? 'active' : ''}>
               <Icon fontSize="small" /> {label}
             </Link>
           ))}

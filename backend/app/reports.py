@@ -156,7 +156,7 @@ def guess_role(columns: set[str], owner: str) -> str | None:
     return None
 
 
-def parse_uploads(entity: str, files: list[tuple[str, bytes]], assignments: dict | None = None) -> dict:
+def parse_uploads(entity: str, files: list[tuple[str, bytes]], assignments: dict | None = None, strict_prefix: bool = False) -> dict:
     """Build the same {"entity", "stages"} result as the API fetch from uploaded Quick Report files.
 
     A file is tied to a data set by (1) an explicit assignment, (2) the report code in its name/sheet name
@@ -180,6 +180,8 @@ def parse_uploads(entity: str, files: list[tuple[str, bytes]], assignments: dict
             code = (assignments.get(filename) or "").upper() or None
             if not code:
                 m = CODE_RE.match(name.replace("\\", "/").split("/")[-1])
+                if strict_prefix and m and m.group(1).upper() in PREFIX.values() and m.group(1).upper() != PREFIX[entity]:
+                    continue  # a sheet of the other entity in a combined workbook
                 code = f"{m.group(1).upper()}{m.group(2)}" if m else None
                 how = "name"
             if code not in by_code:

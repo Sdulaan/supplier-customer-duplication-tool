@@ -4,3 +4,6 @@ httpx==0.28.1
 pydantic==2.11.7
 openpyxl==3.1.5
 python-multipart==0.0.32
+scikit-learn==1.7.0
+joblib==1.5.3
+numpy==2.5.1
