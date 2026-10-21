@@ -67,8 +67,15 @@ def customer_scan(results: list[dict]) -> dict:
                       "excluded": {"template": 0, "oneTime": 0, "internal": 0}}}
 
 
-def customer_scan_from_files(uploads: list[tuple[str, bytes]]) -> dict:
+def customer_scan_from_files(uploads: list[tuple[str, bytes]], selection: dict | None = None) -> dict:
     res = reports.parse_uploads("customer", uploads)
+    if selection is not None:
+        from .column_select import apply_selection
+        role_of = {code: role for role, code in reports.ROLE_CODES["customer"].items()}
+        stage_of = {c["code"]: c["stage"] for c in reports.catalog("customer")}
+        for item in res["report"]:
+            stage = res["stages"][stage_of[item["code"]]]
+            stage["records"] = apply_selection(stage["records"], selection.get(role_of.get(item["code"])))
     if not res["stages"]["general"]["records"]:
         raise ValueError("No customer general report found (a sheet named CUS01_... or one with Customer Id / Name / Association No columns is needed).")
     out = customer_scan([res])

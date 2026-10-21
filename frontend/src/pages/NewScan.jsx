@@ -12,13 +12,19 @@ export default function NewScanPage({ entity }) {
   const [source, setSource] = useState('reports') // 'reports' (Quick Report files) | 'ifs' (IFS environment)
   const [files, setFiles] = useState([])
   const [name, setName] = useState('')
-  const [useMl, setUseMl] = useState(true)
   const [conditions, setConditions] = useState([])
   const [selected, setSelected] = useState([])
   const [envs, setEnvs] = useState([])
   const [envId, setEnvId] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [tabs, setTabs] = useState([]) // recognised reports with their columns
+  const [colSel, setColSel] = useState({}) // role -> ticked column keys
+  const [activeTab, setActiveTab] = useState('')
+  const [reading, setReading] = useState(false)
+  const [validation, setValidation] = useState(null)
+  const [validatedKey, setValidatedKey] = useState('')
+  const [validating, setValidating] = useState(false)
 
   useEffect(() => {
     if (!cfg.hasConditions) return
@@ -28,12 +34,56 @@ export default function NewScanPage({ entity }) {
     loadAllEnvironments().then((all) => { setEnvs(all); setEnvId(getActiveEnvId(all)) })
   }, [])
 
+  useEffect(() => {
+    setTabs([]); setColSel({}); setActiveTab(''); setValidation(null); setValidatedKey('')
+    if (!files.length) return undefined
+    let current = true
+    const form = new FormData()
+    files.forEach((f) => form.append('files', f, f.name))
+    form.append('entity', entity)
+    setReading(true)
+    fetchJson('/api/spec-dedup/inspect', { method: 'POST', body: form }).then((r) => {
+      if (!current) return
+      setTabs(r.tabs)
+      setColSel(Object.fromEntries(r.tabs.map((t) => [t.role, t.columns.map((c) => c.key)])))
+      setActiveTab(r.tabs[0]?.role || '')
+    }, (e) => current && setError(e.message)).finally(() => current && setReading(false))
+    return () => { current = false }
+  }, [files, entity])
+
   const env = envs.find((e) => e.id === envId)
   const vars = resolveVariables(env)
   const token = envId ? getToken(envId) : null
   const ifsReady = Boolean(vars.baseUrl && token)
   const canRun = source === 'reports' ? files.length > 0 : ifsReady
+  const inputKey = JSON.stringify([files.map((f) => [f.name, f.size]), colSel, [...selected].sort()])
+  const validationCurrent = validatedKey === inputKey
+  const tab = tabs.find((t) => t.role === activeTab)
+  const toggleColumn = (role, key) => setColSel((c) => ({ ...c, [role]: c[role].includes(key) ? c[role].filter((k) => k !== key) : [...c[role], key] }))
+  const setAllColumns = (t, on) => setColSel((c) => ({ ...c, [t.role]: on ? t.columns.map((x) => x.key) : t.columns.filter((x) => x.locked).map((x) => x.key) }))
   const toggle = (id) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]))
+
+  function reportForm() {
+    const form = new FormData()
+    files.forEach((f) => form.append('files', f, f.name))
+    form.append('entity', entity)
+    if (tabs.length) form.append('columns', JSON.stringify(colSel))
+    return form
+  }
+
+  async function validate() {
+    setValidating(true)
+    setError('')
+    const key = inputKey
+    try {
+      setValidation(await fetchJson('/api/spec-dedup/validate', { method: 'POST', body: reportForm() }))
+      setValidatedKey(key)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setValidating(false)
+    }
+  }
 
   async function run() {
     setBusy(true)
@@ -44,14 +94,15 @@ export default function NewScanPage({ entity }) {
         const form = new FormData()
         files.forEach((f) => form.append('files', f, f.name))
         form.append('entity', entity)
-        form.append('useMl', useMl)
+        form.append('useMl', true)
         form.append('name', name)
         form.append('conditions', selected.join(','))
+        if (tabs.length) form.append('columns', JSON.stringify(colSel))
         body = await fetchJson('/api/spec-dedup/upload', { method: 'POST', body: form })
       } else {
         body = await fetchJson('/api/spec-dedup/fetch', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ entity, baseUrl: vars.baseUrl, accessToken: token.accessToken, name, useMl, conditions: cfg.hasConditions ? selected : null })
+          body: JSON.stringify({ entity, baseUrl: vars.baseUrl, accessToken: token.accessToken, name, useMl: true, conditions: cfg.hasConditions ? selected : null })
         })
       }
       navigate(`${cfg.base}/${body.scan.id}`)
@@ -132,12 +183,7 @@ export default function NewScanPage({ entity }) {
               </div>
             </section>
           )}
-          {cfg.hasConditions ? (
-            <section className="panel">
-              <h2>Learned scoring</h2>
-              <label className="check-row"><input type="checkbox" checked={useMl} onChange={(e) => setUseMl(e.target.checked)} disabled={busy} /> Add the ML probability to each pair (advisory; rule scores decide the tier)</label>
-            </section>
-          ) : (
+          {!cfg.hasConditions && (
             <section className="panel">
               <h2>Checks used</h2>
               <p className="muted" style={{ fontSize: 13, margin: 0 }}>Customers are compared on tax / registration number, bank account, name (legal, phonetic, acronym), street address, phone, email, shared contact person and legacy ID, with penalties for conflicting registration numbers, branches and different countries.</p>
@@ -146,9 +192,56 @@ export default function NewScanPage({ entity }) {
         </div>
       </div>
 
+      {source === 'reports' && files.length > 0 && (
+        <section className="panel column-picker">
+          <div className="column-picker-head">
+            <div><h2>Columns to use</h2><p className="muted">Each tab is one report. Untick the columns the scan should ignore; identifying columns are always used.</p></div>
+            {tab && <div className="toolbar">
+              <button type="button" className="secondary" onClick={() => setAllColumns(tab, true)} disabled={busy}>Select all</button>
+              <button type="button" className="secondary" onClick={() => setAllColumns(tab, false)} disabled={busy}>Clear</button>
+            </div>}
+          </div>
+          {reading && <p className="muted">Reading the columns…</p>}
+          {!reading && !tabs.length && <p className="muted">No recognised reports, so there are no columns to choose.</p>}
+          {tab && (
+            <>
+              <div className="tabs wrap">
+                {tabs.map((t) => <button type="button" key={t.role} className={`tab ${t.role === activeTab ? 'active' : ''}`} onClick={() => setActiveTab(t.role)}>{t.label}<small>{colSel[t.role]?.length}/{t.columns.length}</small></button>)}
+              </div>
+              <p className="muted column-source">{tab.file} · {tab.rows.toLocaleString()} rows</p>
+              <div className="column-grid">
+                {tab.columns.map((c) => (
+                  <label key={c.key} className={c.locked ? 'locked' : ''} title={c.locked ? 'Always used' : ''}>
+                    <input type="checkbox" checked={c.locked || Boolean(colSel[tab.role]?.includes(c.key))} disabled={busy || c.locked} onChange={() => toggleColumn(tab.role, c.key)} />
+                    <span>{c.label}</span>{c.locked && <em>always used</em>}
+                  </label>
+                ))}
+              </div>
+            </>
+          )}
+        </section>
+      )}
+
+      {validation && source === 'reports' && (
+        <section className="panel" aria-live="polite">
+          <h2>{validation.valid ? 'Validation passed' : 'Validation failed'} <span className={validation.valid ? 'badge HIGH' : 'badge LOW'}>{validation.valid ? 'Ready' : 'Blocked'}</span></h2>
+          <p className="muted">{validationCurrent ? (validation.valid ? 'Run scan is available while this validation stays current.' : 'Fix the points below, then validate again.') : 'The files, columns or conditions changed since this validation. Validate again to run the scan.'}</p>
+          <div className="metrics">
+            <span>{validation.recordCount.toLocaleString()} {cfg.label.toLowerCase()}s</span>
+            <span>{validation.reports.length} reports</span>
+            <span>{validation.ignoredColumns} columns ignored</span>
+            <span>{validation.warnings.length} warnings</span>
+          </div>
+          <ul className="file-list">{validation.reports.map((r) => <li key={r.role}><span>{r.label}</span><small>{r.rows.toLocaleString()} rows · {r.used}/{r.columns} columns</small></li>)}</ul>
+          {cfg.hasConditions && <p className="muted" style={{ fontSize: 13 }}>Conditions used: {selected.length ? conditions.filter((c) => selected.includes(c.id)).map((c) => c.label).join(', ') : 'none (name only)'}.</p>}
+          {validation.warnings.map((w, i) => <p className="warning" key={i}>{w}</p>)}
+        </section>
+      )}
+
       <div className="actions" style={{ marginTop: 18 }}>
-        <button type="button" onClick={run} disabled={busy || !canRun}>{busy ? (source === 'ifs' ? 'Fetching and scanning…' : 'Scanning…') : source === 'ifs' ? `Fetch ${cfg.label.toLowerCase()}s and scan` : 'Run scan'}</button>
-        {!canRun && <p className="validation-guidance">{source === 'reports' ? 'Run scan becomes available once the Excel files are selected.' : 'Fetching becomes available once the environment is authorized.'}</p>}
+        {source === 'reports' && <button type="button" className="secondary" onClick={validate} disabled={busy || validating || !files.length || reading}>{validating ? 'Validating…' : 'Validate'}</button>}
+        <button type="button" onClick={run} disabled={busy || !canRun || (source === 'reports' && !(validation?.valid && validationCurrent))}>{busy ? (source === 'ifs' ? 'Fetching and scanning…' : 'Scanning…') : source === 'ifs' ? `Fetch ${cfg.label.toLowerCase()}s and scan` : 'Run scan'}</button>
+        {!canRun && <p className="validation-guidance">{source === 'reports' ? (files.length ? 'Validate the files, columns and conditions to enable Run scan.' : 'Select the Excel files, then validate them to enable Run scan.') : 'Fetching becomes available once the environment is authorized.'}</p>}
       </div>
       {busy && <section className="panel processing-state" role="status" aria-live="polite"><p className="eyebrow">Scan running</p><h2>Processing {cfg.label.toLowerCase()}s…</h2><p className="muted">{source === 'ifs' ? 'Fetching from IFS, scoring candidate pairs and saving the result. A large environment can take a few minutes.' : 'Scoring candidate pairs and saving the result. This usually takes a few seconds.'}</p></section>}
     </>

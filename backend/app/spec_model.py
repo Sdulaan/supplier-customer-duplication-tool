@@ -731,8 +731,12 @@ def _cluster(parties: list[Supplier], scored: list) -> list[dict]:
     return groups
 
 
-def run_files(files: list[tuple[str, bytes]], ml=None, conditions=ALL_CONDITIONS) -> dict:
+def run_files(files: list[tuple[str, bytes]], ml=None, conditions=ALL_CONDITIONS, selection: dict | None = None) -> dict:
+    """`selection` ({role: column keys}) limits each report to the columns the user ticked; None uses every column."""
     tables, report = load_tables(files)
+    if selection is not None:
+        from .column_select import apply_selection
+        tables = {role: apply_selection(rows, selection.get(role)) for role, rows in tables.items()}
     missing = [ROLE_FILE[r] + " " + r for r in ROLE_FILE if r not in tables]
     if "general" not in tables:
         raise ValueError("The SupplierInfoGeneral report (Supplier Id, Name, Association No, Supplier Category Db ...) is required.")

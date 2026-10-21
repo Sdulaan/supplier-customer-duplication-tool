@@ -8,7 +8,7 @@ from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
-from . import dedup, ifs, reports, scan_adapters, spec_export, spec_ml, spec_model, spec_store
+from . import column_select, dedup, ifs, reports, scan_adapters, spec_export, spec_ml, spec_model, spec_store
 
 app = FastAPI(title="Supplier & Customer Duplication API")
 
@@ -164,22 +164,44 @@ async def duplicates_from_files(files: list[UploadFile] = File(...), minScore: i
     return {"success": True, "loaded": loaded, **dedup.find_duplicates(results, minScore)}
 
 
+@app.post("/api/spec-dedup/inspect")
+async def spec_dedup_inspect(files: list[UploadFile] = File(...), entity: Literal["supplier", "customer"] = Form("supplier")):
+    """The columns of every recognised Quick Report (one tab each) so the user can choose which ones the scan uses."""
+    uploads = [(f.filename or "", await f.read()) for f in files]
+    return {"success": True, "tabs": column_select.inspect(entity, uploads)}
+
+
+@app.post("/api/spec-dedup/validate")
+async def spec_dedup_validate(files: list[UploadFile] = File(...), entity: Literal["supplier", "customer"] = Form("supplier"), columns: str = Form("")):
+    """Check the files and the column choice without running the scan."""
+    uploads = [(f.filename or "", await f.read()) for f in files]
+    try:
+        selection = column_select.parse_selection(columns)
+    except ValueError as exc:
+        return JSONResponse({"success": False, "error": str(exc)}, status_code=400)
+    return {"success": True, **column_select.validate(entity, uploads, selection)}
+
+
 @app.post("/api/spec-dedup/upload")
 async def spec_dedup(files: list[UploadFile] = File(...), useMl: bool = Form(True), name: str = Form(""), conditions: str = Form(""),
-                     entity: Literal["supplier", "customer"] = Form("supplier")):
+                     entity: Literal["supplier", "customer"] = Form("supplier"), columns: str = Form("")):
     """Supplier duplicate detection on the 10 IFS Quick Report exports of the 10-table specification
     (rule matrix A01..P01, tiers, survivor scorecard, plus the learned layer when a trained model exists)."""
     uploads = [(f.filename or "", await f.read()) for f in files]
+    try:
+        selection = column_select.parse_selection(columns)
+    except ValueError as exc:
+        return JSONResponse({"success": False, "error": str(exc)}, status_code=400)
     if entity == "customer":
         try:
-            out = scan_adapters.customer_scan_from_files(uploads)
+            out = scan_adapters.customer_scan_from_files(uploads, selection)
         except ValueError as exc:
             return JSONResponse({"success": False, "error": str(exc)}, status_code=400)
         return {"success": True, "scan": spec_store.save_scan(out, name, "customer", "reports"), **out}
     model = spec_ml.PairModel.load() if useMl else None
     try:
         chosen = tuple(c for c in conditions.split(",") if c in spec_model.CONDITIONS) if conditions else spec_model.ALL_CONDITIONS
-        out = spec_model.run_files(uploads, model, chosen)
+        out = spec_model.run_files(uploads, model, chosen, selection)
     except ValueError as exc:
         return JSONResponse({"success": False, "error": str(exc)}, status_code=400)
     out["model"] = None if not model else {**{k: v for k, v in model.meta.items() if k != "features"}, "canSurface": model.can_surface}

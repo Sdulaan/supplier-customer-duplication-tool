@@ -1,0 +1,27 @@
+failed to load config from C:\Projects\supplier-customer-duplication-tool\frontend\vite.config.js
+error when starting dev server:
+Error: Build failed with 1 error:
+
+[plugin externalize-deps]
+Error: spawn EPERM
+    at ChildProcess.spawn (node:internal/child_process:441:11)
+    at spawn (node:child_process:796:9)
+    at Object.execFile (node:child_process:349:17)
+    at exec (node:child_process:236:25)
+    at optimizeSafeRealPathSync (file:///C:/Projects/supplier-customer-duplication-tool/frontend/node_modules/vite/dist/node/chunks/node.js:1950:2)
+    at windowsSafeRealPathSync (file:///C:/Projects/supplier-customer-duplication-tool/frontend/node_modules/vite/dist/node/chunks/node.js:1936:3)
+    at getRealPath (file:///C:/Projects/supplier-customer-duplication-tool/frontend/node_modules/vite/dist/node/chunks/node.js:32684:36)
+    at tryResolveRealFileOrType (file:///C:/Projects/supplier-customer-duplication-tool/frontend/node_modules/vite/dist/node/chunks/node.js:32678:9)
+    at tryCleanFsResolve (file:///C:/Projects/supplier-customer-duplication-tool/frontend/node_modules/vite/dist/node/chunks/node.js:32427:21)
+    at tryFsResolve (file:///C:/Projects/supplier-customer-duplication-tool/frontend/node_modules/vite/dist/node/chunks/node.js:32420:14)
+    at aggregateBindingErrorsIntoJsError (file:///C:/Projects/supplier-customer-duplication-tool/frontend/node_modules/rolldown/dist/shared/error-BuvQYXuZ.mjs:48:18)
+    at unwrapBindingResult (file:///C:/Projects/supplier-customer-duplication-tool/frontend/node_modules/rolldown/dist/shared/error-BuvQYXuZ.mjs:18:128)
+    at #build (file:///C:/Projects/supplier-customer-duplication-tool/frontend/node_modules/rolldown/dist/shared/rolldown-build-CrPk_lZe.mjs:3246:34)
+    at async bundleConfigFile (file:///C:/Projects/supplier-customer-duplication-tool/frontend/node_modules/vite/dist/node/chunks/node.js:34962:17)
+    at async bundleAndLoadConfigFile (file:///C:/Projects/supplier-customer-duplication-tool/frontend/node_modules/vite/dist/node/chunks/node.js:34870:18)
+    at async loadConfigFromFile (file:///C:/Projects/supplier-customer-duplication-tool/frontend/node_modules/vite/dist/node/chunks/node.js:34839:42)
+    at async resolveConfig (file:///C:/Projects/supplier-customer-duplication-tool/frontend/node_modules/vite/dist/node/chunks/node.js:34465:22)
+    at async _createServer (file:///C:/Projects/supplier-customer-duplication-tool/frontend/node_modules/vite/dist/node/chunks/node.js:26197:65)
+    at async CAC.<anonymous> (file:///C:/Projects/supplier-customer-duplication-tool/frontend/node_modules/vite/dist/node/cli.js:708:18) {
+  errors: [Getter/Setter]
+}
